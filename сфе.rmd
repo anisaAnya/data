@@ -1,0 +1,148 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+In the brfss, stratified sampling was used. If we miss the fact that participants in such long questionnaires are category of people who can't be absolutely random, this study is observational and generalizable for the entire population. Since participants were not randomly divided to groups and assigned to perform different tasks, etc., causation can not be infered from data.
+
+There should also be inaccuracies and distortions in the data, since it is unlikely that people can accurately and honestly answer such questions as: "How many of the past 30 days have been active or healthy?"
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:** For the general population in the US, is there a correlation between the amount of sleep, the person’s cognitive functioning and his income level? For my own experience I believe that people who sleep regularly are more productive and sucsess in study. I wonder if there associative relationship between sleep hours, cognitive health and signs of productivity, such as high wages?
+
+**Research quesion 2:** For the general population in the US, is there a pattern in relation between month and reported number of days with poor mental health? Many people associate their depression or poor mental health with season. There is also a Seasonal affective disorder which is occurs in same season every year, more often in winter. I wonder if that facts can affect a data.
+
+**Research quesion 3:** For the general population in the US, is there any relation between smoking, drinking alcohol, weight and having depression disorder? Several studies that I read earlier found a correlation between depression, obesity, alcohol, and smoking. I will try to find a correlation between these variables in the proposed data.
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+
+**Research quesion 1:**
+
+
+All meaningless emissions and observations with missing data were filtered out. To determine whether there is an association between income level and depression level, all data were grouped by income level, and then the average number of days with poor mental health was calculated.  All data was visualized using bars.
+
+```{r}
+#Filter observation with no data
+mydata <- filter(brfss2013, !is.na(income2), !is.na(menthlth),menthlth < 31, !is.na(sleptim1), sleptim1 < 25) 
+
+myvars <- c("income2", "menthlth", "sleptim1")
+mydata <- mydata[myvars]
+
+# Create df income level and mean of sleep time for each income level catagory.
+income_M_Hlth <- mydata %>% group_by(income2) %>% summarise(mn_depressiondays = mean(menthlth))
+
+# display
+income_M_Hlth
+
+ggplot(income_M_Hlth, aes(x=income2, y=mn_depressiondays)) + 
+  geom_bar(stat="identity", width=.5, fill="green") + 
+  labs(title="Mean number îf days mental health not good for each level of income") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
+```
+
+There is a correlation between lower income and more depressive, stressful days, which is not at all surprising. The main question is: is there a correlation between the average hours of sleep per day and the number of days with poor mental health? Average hours of sleep per day stored in "sleptim1" variable.
+
+```{r}
+
+g <- ggplot(mydata, aes(menthlth, sleptim1))
+g + geom_point() + 
+  geom_smooth(method="lm", se=F) +
+  labs(subtitle="Number îf days mental health not good vs average number of slept hours per day", 
+       y="sleptim1", 
+       x="menthlth", 
+       title="Scatterplot with overlapping points")
+
+
+```
+
+Looking at the plot above, there does not appear to be a relation between time sleeping and the number of days with poor mental health.
+
+**Research quesion 2:**
+
+```{r}
+#All observations with missed data have been filtered out. Then all responds was grouped by month, added, and divided on number of responses.
+Sum_poorhlthday <- filter(brfss2013, !is.na(menthlth), !is.na(imonth) )
+Sum_poorhlthday <- aggregate(Sum_poorhlthday$menthlth, by=list(sum=Sum_poorhlthday$imonth), FUN=sum)
+
+reports <- brfss2013 %>% filter(!is.na(menthlth), !is.na(imonth)) %>% group_by(imonth) %>% summarise(n=n() )
+reports <- mutate(reports, mean = round(Sum_poorhlthday$x/reports$n, 2))
+
+#print results
+reports
+
+#Plot data using bars
+
+ggplot(aes(x=imonth, y=mean), data=reports) + geom_bar(stat = 'identity') + ggtitle('Mean days with poor mental health by Month')+ ylab('Mean days with poor mental health')
+
+
+```
+
+I was trying to find out whether people respond their mental health condition differently in the different month. For example, are people more likely to say they have poor mental health in winter or autumn? It appears that there was no obvious pattern.
+
+
+**Research quesion 3:**
+
+For research proposal several variables were chosen: 
+smoke100: Smoked At Least 100 Cigarettes
+avedrnk2: Avg Alcoholic Drinks Per Day In Past 30
+weight2: Reported Weight In Pounds
+addepev2: Ever Told You Had A Depressive Disorder
+
+```{r}
+#Select variables which are we interested in
+vars <- names(brfss2013) %in% c('smoke100','addepev2', 'avedrnk2',  'weight2')
+#filter out observations with missed data
+
+temp <- brfss2013 %>% filter(!is.na(smoke100), !is.na(addepev2), !is.na(avedrnk2), !is.na(weight2))
+selected_var <- temp[vars]
+
+#transformate data to numeric
+selected_var$addepev2 <- ifelse(selected_var$addepev2=="Yes", 1, 0)
+selected_var$weight2 <- as.numeric(selected_var$weight2)
+selected_var$smoke100 <- ifelse(selected_var$smoke100=="Yes", 1, 0)
+selected_var$avedrnk2 <- as.numeric(selected_var$avedrnk2)
+
+library(Hmisc)
+library(corrplot)
+
+#plot data
+corr.matrix <- cor(selected_var)
+corrplot(corr.matrix, main="\n\nCorrelation Plot of Smoke, Depression disorder, Alcohol, and Weight", method="color")
+```
+
+It is appears that there is no strong correlation between these variables.
